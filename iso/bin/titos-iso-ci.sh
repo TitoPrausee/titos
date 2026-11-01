@@ -12,6 +12,15 @@ mkdir -p "$OUT"
 [[ $EUID -eq 0 ]] || { echo "Bitte mit sudo laufen lassen."; exit 1; }
 echo ":: [titOS-CI] target=$ARCH host=$(uname -m)"
 
+# titOS-Quellen (Repo-Root) für den Builder in den ISO-Ordner legen
+# (titos-iso-make erwartet sie als "$SRC/titos/")
+CHECKOUT_ROOT="$(cd "$(dirname "$REPO_ROOT")" && pwd)"
+if [[ -d "$CHECKOUT_ROOT/titos" ]]; then
+    rm -rf "$REPO_ROOT/titos"
+    cp -R "$CHECKOUT_ROOT/titos" "$REPO_ROOT/titos"
+    echo ":: titOS-Quellen gestaget: $REPO_ROOT/titos"
+fi
+
 cleanup() {
     umount "$ROOTFS/dev" "$ROOTFS/proc" "$ROOTFS/sys" "$ROOTFS/run" 2>/dev/null || true
 }
@@ -60,8 +69,12 @@ else
 
     echo ":: Keyrings + Build-Tools im chroot ..."
     chroot "$ROOTFS" bash -ec '
-        pacman-key --init
+        # Bootstrap-Trick: erste Transaktion ohne Sig-Check (Keyring-Verifikation
+        # kommt sonst in den Zirkel: Keyring-Install prüft mit fehlendem Keyring)
+        sed -i "s|^SigLevel.*|SigLevel = Never|" /etc/pacman.conf
         pacman -Sy --noconfirm archlinuxarm-keyring archlinux-keyring
+        sed -i "s|^SigLevel.*|SigLevel = Required DatabaseOptional|" /etc/pacman.conf
+        pacman-key --init
         pacman-key --populate archlinuxarm archlinux
         pacman -Syu --noconfirm
         pacman -S --needed --noconfirm archiso openssl zsh sudo rsync dosfstools

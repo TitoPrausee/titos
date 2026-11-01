@@ -3,3 +3,4 @@ out/
 *.sha256
 *.iso.sig
 .DS_Store
+iso/titos/
