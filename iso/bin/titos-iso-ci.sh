@@ -24,7 +24,9 @@ if [[ "$ARCH" == "x86_64" ]]; then
         -v "$REPO_ROOT:/iso" \
         ghcr.io/archlinux/archlinux:latest \
         bash -ec '
-            pacman -Syu --noconfirm
+            # stabiler Geo-Mirror zuerst (fastly hatte Timeouts)
+            sed -i "1i Server = https://geo.mirror.pkgbuild.com/\$repo/os/\$arch" /etc/pacman.d/mirrorlist
+            pacman -Syu --noconfirm || pacman -Syu --noconfirm
             pacman -S --needed --noconfirm archiso openssl zsh rsync
             cd /iso
             OUT=/iso/out ./bin/titos-iso-make
@@ -44,6 +46,10 @@ else
     tar -xzf alarm-aarch64.tar.gz -C "$ROOTFS"
     rm -f /var/tmp/alarm-aarch64.tar.gz   # Platz sparen (Runner-Disk)
     cp -L /etc/resolv.conf "$ROOTFS/etc/resolv.conf"
+
+    # pacman-Fehlalarme im chroot abstellen (OverlayFS kann cachedir nicht staten)
+    mkdir -p "$ROOTFS/var/cache/pacman/pkg"
+    sed -i '/^CheckSpace$/d' "$ROOTFS/etc/pacman.conf"
 
     echo ":: Bind-Mounts ..."
     mount --bind /dev  "$ROOTFS/dev"
