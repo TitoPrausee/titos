@@ -7,7 +7,7 @@ set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE="/var/tmp/titos-iso-profile"
-WORK="/var/tmp/titos-iso-work"
+WORK="/var/tmp/titos-iso-work-$(date +%s)"
 OUT="${OUT:-$SRC/out}"
 ARCH="${ARCH:-$(uname -m)}"
 LIVE_USER="titos"
@@ -34,7 +34,10 @@ else
 fi
 
 echo ":: Räume auf ..."
-rm -rf "$PROFILE" "$WORK"
+# Hängende proc/sys/dev-Mounts aus früheren Läufen lösen, sonst stirbt rm -rf daran
+while read -r m; do umount -l "$m" 2>/dev/null || true; done < <(findmnt -Rnr -o TARGET "$WORK" 2>/dev/null || true)
+umount -l "$WORK" 2>/dev/null || true
+rm -rf "$WORK" || true
 mkdir -p "$PROFILE" "$OUT"
 
 echo ":: Kopiere archiso releng Basisprofil ..."
