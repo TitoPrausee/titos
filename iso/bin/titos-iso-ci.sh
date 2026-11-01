@@ -21,13 +21,13 @@ if [[ "$ARCH" == "x86_64" ]]; then
     # ─── x86_64: Arch-Toolchain-Container ────────────────────────────────────
     docker pull --platform linux/amd64 ghcr.io/archlinux/archlinux:latest
     docker run --privileged --platform linux/amd64 --rm \
-        -v "$REPO_ROOT:/repo" \
+        -v "$REPO_ROOT:/iso" \
         ghcr.io/archlinux/archlinux:latest \
         bash -ec '
             pacman -Syu --noconfirm
             pacman -S --needed --noconfirm archiso openssl zsh rsync
-            cd /repo/iso
-            OUT=/repo/out ./bin/titos-iso-make
+            cd /iso
+            OUT=/iso/out ./bin/titos-iso-make
         '
     cp "$REPO_ROOT"/out/* "$OUT/" 2>/dev/null || true
 else
@@ -42,6 +42,7 @@ else
     rm -rf "$ROOTFS"
     mkdir -p "$ROOTFS"
     tar -xzf alarm-aarch64.tar.gz -C "$ROOTFS"
+    rm -f /var/tmp/alarm-aarch64.tar.gz   # Platz sparen (Runner-Disk)
     cp -L /etc/resolv.conf "$ROOTFS/etc/resolv.conf"
 
     echo ":: Bind-Mounts ..."
@@ -65,7 +66,7 @@ else
     cp -R "$REPO_ROOT" "$ROOTFS/repo"
 
     echo ":: Baue ARM64-ISO im chroot ..."
-    chroot "$ROOTFS" bash -ec 'cd /repo/iso && OUT=/repo/out ./bin/titos-iso-make'
+    chroot "$ROOTFS" bash -ec 'cd /repo && OUT=/repo/out ./bin/titos-iso-make'
 
     echo ":: Hole ISO + Checksumme ..."
     cp "$ROOTFS"/repo/out/*.iso "$ROOTFS"/repo/out/*.sha256 "$OUT/" 2>/dev/null || \
