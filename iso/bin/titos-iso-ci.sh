@@ -62,6 +62,16 @@ else
     trap cleanup EXIT
 
     echo ":: Keyrings + Build-Tools im chroot ..."
+    # archiso ist NICHT in den ALARM-Repos — any-Paket von Arch spiegeln.
+    # Filename dynamisch über die Arch-Package-API (Versionsnummer ändert sich).
+    ARCHISO_FN="$(curl -fsSL "https://archlinux.org/packages/extra/any/archiso/json/" \
+        | grep -o '"filename"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\(archiso[^"]*\)".*/\1/')"
+    [[ "$ARCHISO_FN" == archiso-*.pkg.tar.* ]] || { echo "! archiso-Filename nicht ermittelbar"; exit 1; }
+    echo ":: archiso-Paket: $ARCHISO_FN"
+    curl -fL -o "$ROOTFS/tmp/archiso.pkg.tar.zst" \
+        "https://geo.mirror.pkgbuild.com/extra/os/x86_64/${ARCHISO_FN}" \
+        || { echo "! archiso-Download fehlgeschlagen"; exit 1; }
+
     chroot "$ROOTFS" bash -ec '
         # Bootstrap-Trick: erste Transaktion ohne Sig-Check (Keyring-Verifikation
         # kommt sonst in den Zirkel: Keyring-Install prüft mit fehlendem Keyring)
@@ -70,14 +80,9 @@ else
         sed -i "s|^SigLevel.*|SigLevel = Required DatabaseOptional|" /etc/pacman.conf
         pacman-key --init
         pacman-key --populate archlinuxarm archlinux
+        pacman -U --noconfirm /tmp/archiso.pkg.tar.zst
         pacman -Syu --noconfirm
         pacman -S --needed --noconfirm openssl zsh sudo rsync dosfstools
-        # archiso ist NICHT in den ALARM-Repos: any-Paket von Arch mirror ziehen
-        curl -fL -o /tmp/archiso.pkg.tar.zst \
-            "https://geo.mirror.pkgbuild.com/extra/os/x86_64/archiso-91-1-any.pkg.tar.zst" \
-        && pacman -U --noconfirm /tmp/archiso.pkg.tar.zst \
-        || echo "! archiso-Download fehlgeschlagen"
-        pacman -Q archiso || exit 1
     '
 
     echo ":: Repo ins chroot ..."
