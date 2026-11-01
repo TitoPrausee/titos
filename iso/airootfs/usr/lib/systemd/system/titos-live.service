@@ -1,0 +1,14 @@
+[Unit]
+Description=titOS Live Boot-Hinweis
+After=network-online.target
+ConditionPathExists=/usr/lib/titos-iso/live-boot-hint
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/titos-iso/live-boot-hint
+StandardOutput=tty1
+StandardError=tty1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

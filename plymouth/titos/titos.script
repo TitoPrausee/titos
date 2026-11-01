@@ -1,0 +1,89 @@
+# titOS Plymouth Script — animierter Boot-Splash / animated boot splash
+# "titOS"-Schriftzug mit Puls-Fade + farbiger Ladebalken.
+# "titOS" wordmark with pulsing fade + coloured progress bar.
+
+Window.SetBackgroundTopColor(0.05, 0.03, 0.09);
+Window.SetBackgroundBottomColor(0.02, 0.01, 0.04);
+
+sw = Window.GetWidth();
+sh = Window.GetHeight();
+
+# Logo-Text / wordmark
+logo = Image.Text("titOS", 0.80, 0.45, 1.0, 1, "Sans Bold 80");
+logo_s = Sprite(logo);
+logo_s.SetX(sw / 2 - logo.GetWidth() / 2);
+logo_s.SetY(sh / 2 - logo.GetHeight() / 2 - 30);
+
+# Tagline / Untertitel
+tag = Image.Text("AI-Powered Gaming Linux", 0.55, 0.85, 0.95, 1, "Sans 22");
+tag_s = Sprite(tag);
+tag_s.SetX(sw / 2 - tag.GetWidth() / 2);
+tag_s.SetY(sh / 2 + 55);
+tag_s.SetOpacity(0.75);
+
+# Ladebalken-Hintergrund / progress bar track
+bar_w = Math.Int(sw * 0.4);
+bar_x = sw / 2 - bar_w / 2;
+bar_y = sh / 2 + 110;
+
+track = Image(bar_w, 6);
+# dunkle Spur zeichnen / draw dark track
+i = 0;
+while (i < bar_w) {
+    j = 0;
+    while (j < 6) {
+        track.SetPixel(i, j, 0.15, 0.10, 0.20, 1.0);
+        j++;
+    }
+    i++;
+}
+track_s = Sprite(track);
+track_s.SetX(bar_x);
+track_s.SetY(bar_y);
+
+# Füllung wird dynamisch neu erstellt / fill rebuilt each tick
+fill_s = Sprite();
+fill_s.SetX(bar_x);
+fill_s.SetY(bar_y);
+
+progress = 0;
+pulse = 0;
+
+fun refresh_callback() {
+    pulse = pulse + 0.06;
+    op = 0.55 + 0.45 * Math.Sin(pulse);   # Puls-Fade / pulsing
+    logo_s.SetOpacity(op);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+fun progress_callback(duration, prog) {
+    progress = prog;
+    fw = Math.Int(bar_w * progress);
+    if (fw < 1) fw = 1;
+    fill = Image(fw, 6);
+    k = 0;
+    while (k < fw) {
+        # Farbverlauf Lila->Cyan / purple to cyan gradient
+        frac = k / bar_w;
+        r = 0.6 - 0.4 * frac;
+        g = 0.3 + 0.5 * frac;
+        b = 1.0;
+        m = 0;
+        while (m < 6) {
+            fill.SetPixel(k, m, r, g, b, 1.0);
+            m++;
+        }
+        k++;
+    }
+    fill_s.SetImage(fill);
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# Passwort-Prompt (LUKS) / password dialog
+fun display_password_callback(prompt, bullets) {
+    pw = Image.Text(prompt + " " + bullets, 1, 1, 1);
+    pw_s = Sprite(pw);
+    pw_s.SetX(sw / 2 - pw.GetWidth() / 2);
+    pw_s.SetY(sh / 2 + 150);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_callback);

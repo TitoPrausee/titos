@@ -1,0 +1,46 @@
+# titOS Live ISO — Pakete für airootfs (Live-Umgebung)
+base
+linux-zen
+linux-zen-headers
+linux-firmware
+intel-ucode
+amd-ucode
+syslinux
+
+# Installer-Werkzeuge
+archinstall
+arch-install-scripts
+mkinitcpio
+parted
+dosfstools
+e2fsprogs
+gptfdisk
+btrfs-progs
+rsync
+
+# Netz
+networkmanager
+wpa_supplicant
+wireless-regdb
+openssh
+curl
+wget
+jq
+git
+
+# Basis-Desktop-Tools für die Live-Umgebung
+zsh
+sudo
+neovim
+nano
+vim
+tmux
+htop
+pciutils
+usbutils
+terminus-font
+man-db
+
+# Grub + EFI-Tools (auch live)
+grub
+efibootmgr

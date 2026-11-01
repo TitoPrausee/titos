@@ -1,0 +1,5 @@
+out/
+*.iso
+*.sha256
+*.iso.sig
+.DS_Store

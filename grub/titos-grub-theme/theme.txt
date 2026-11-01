@@ -1,0 +1,62 @@
+# titOS GRUB Theme — dunkel/elegant / dark & elegant
+# Farben: Lila-Akzent auf Dunkel / purple accent on dark
+
+title-text: ""
+desktop-color: "#0a0510"
+desktop-image: ""
+message-color: "#c9b8e8"
+terminal-box: "terminal_box_*"
+terminal-font: "Unifont Regular 16"
+
+# Kopfzeile / header
++ label {
+    top = 12%
+    left = 0
+    width = 100%
+    align = "center"
+    color = "#b48cff"
+    font = "DejaVu Sans Bold 32"
+    text = "titOS"
+}
+
++ label {
+    top = 20%
+    left = 0
+    width = 100%
+    align = "center"
+    color = "#6ad0e0"
+    font = "DejaVu Sans 14"
+    text = "AI-Powered Gaming Linux"
+}
+
+# Boot-Menü / boot menu
++ boot_menu {
+    top = 35%
+    left = 25%
+    width = 50%
+    height = 45%
+    item_color = "#c9b8e8"
+    selected_item_color = "#ffffff"
+    item_height = 32
+    item_padding = 8
+    item_spacing = 6
+    selected_item_pixmap_style = "select_*"
+    scrollbar = true
+    scrollbar_width = 10
+    scrollbar_thumb = "slider_*"
+}
+
+# Fortschrittsbalken (Timeout) / countdown progress
++ progress_bar {
+    id = "__timeout__"
+    top = 85%
+    left = 25%
+    width = 50%
+    height = 16
+    show_text = true
+    text_color = "#c9b8e8"
+    fg_color = "#b48cff"
+    bg_color = "#1a1026"
+    border_color = "#3a2a4a"
+    text = "@TIMEOUT_NOTIFICATION_LONG@"
+}

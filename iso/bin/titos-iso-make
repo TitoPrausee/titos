@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# titos-iso-make — baut die titOS ISO (lauft auf dem Build-Host, braucht root)
+# Erzeugt das ISO aus dem archiso-releng Basisprofil + titOS-Override.
+#   sudo ./bin/titos-iso-make
+set -euo pipefail
+
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROFILE="/var/tmp/titos-iso-profile"
+WORK="/var/tmp/titos-iso-work"
+OUT="${OUT:-$SRC/out}"
+LIVE_USER="titos"
+LIVE_USER_PW="titos"
+
+[[ $EUID -eq 0 ]] || { echo "Bitte mit sudo ausführen (mkarchiso braucht root)."; exit 1; }
+
+echo ":: Räume auf ..."
+rm -rf "$PROFILE" "$WORK"
+mkdir -p "$PROFILE" "$OUT"
+
+echo ":: Kopiere archiso releng Basisprofil ..."
+cp -a /usr/share/archiso/configs/releng/. "$PROFILE/"
+
+echo ":: Overlaye titOS Profil (packages, airootfs) ..."
+rsync -a "$SRC/packages.x86_64" "$PROFILE/packages.x86_64"
+rsync -a "$SRC/airootfs/" "$PROFILE/airootfs/"
+
+echo ":: Kernel -> linux-zen umbiegen ..."
+# Normalisieren + ersetzen (idempotent)
+while IFS= read -r f; do
+    sed -i \
+        -e 's/vmlinuz-linux-zen/vmlinuz-linux/g' \
+        -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
+        -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
+        "$f"
+done < <(grep -rl 'vmlinuz-linux' "$PROFILE" || true)
+
+# mkinitcpio preset: linux.preset -> linux-zen.preset
+PRESET_DIR="$PROFILE/airootfs/etc/mkinitcpio.d"
+if [[ -f "$PRESET_DIR/linux.preset" && ! -f "$PRESET_DIR/linux-zen.preset" ]]; then
+    mv "$PRESET_DIR/linux.preset" "$PRESET_DIR/linux-zen.preset"
+    sed -i \
+        -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
+        -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
+        "$PRESET_DIR/linux-zen.preset"
+fi
+
+echo ":: ISO-Beschriftung auf titOS setzen ..."
+sed -i 's/^iso_name=.*/iso_name="titOS"/'                  "$PROFILE/profiledef.sh"
+sed -i 's/^iso_label=.*/iso_label="TITOS_$(date +%Y%m)"/'  "$PROFILE/profiledef.sh"
+sed -i 's/^iso_application=.*/iso_application="titOS Live-Installer (AI-Powered Gaming Linux)"/' "$PROFILE/profiledef.sh"
+sed -i 's/^iso_publisher=.*/iso_publisher="titOS <https:\/\/github.com\/TitoPrausee\/titOS>"/'   "$PROFILE/profiledef.sh"
+
+echo ":: Live-User ${LIVE_USER} anlegen (autologin), root-Passwort sperren ..."
+HASH="$(openssl passwd -6 "$LIVE_USER_PW")"
+if ! grep -q "^${LIVE_USER}:" "$PROFILE/airootfs/etc/passwd" 2>/dev/null; then
+    echo "${LIVE_USER}:x:1000:1000:titOS Live:/home/${LIVE_USER}:/bin/zsh" >> "$PROFILE/airootfs/etc/passwd"
+    echo "${LIVE_USER}:${HASH}::0:99999:7:::" >> "$PROFILE/airootfs/etc/shadow"
+    echo "${LIVE_USER}:x:1000:" >> "$PROFILE/airootfs/etc/group"
+fi
+sed -i 's/^root::/root:!*:/' "$PROFILE/airootfs/etc/shadow" || true
+
+# Passwortlose sudo für den Live-User (nur Live-Umgebung)
+mkdir -p "$PROFILE/airootfs/etc/sudoers.d"
+printf '%s ALL=(ALL:ALL) NOPASSWD: ALL\n' "$LIVE_USER" \
+    > "$PROFILE/airootfs/etc/sudoers.d/titos-live"
+chmod 440 "$PROFILE/airootfs/etc/sudoers.d/titos-live"
+
+# Home-Verzeichnis über tmpfiles sicherstellen (uid wird erst im Build gesetzt)
+mkdir -p "$PROFILE/airootfs/etc/tmpfiles.d"
+printf 'd /home/%s 0700 %s %s -\n' "$LIVE_USER" "$LIVE_USER" "$LIVE_USER" \
+    > "$PROFILE/airootfs/etc/tmpfiles.d/titos-live.conf"
+
+echo ":: Live-Installer installieren ..."
+mkdir -p "$PROFILE/airootfs/usr/local/bin" "$PROFILE/airootfs/usr/lib/titos-iso/install"
+install -m 755 "$SRC/install/run.sh"             "$PROFILE/airootfs/usr/local/bin/titos-install"
+install -m 755 "$SRC/install/chroot-stage-a.sh"  "$PROFILE/airootfs/usr/lib/titos-iso/install/"
+install -m 755 "$SRC/install/chroot-stage-b.sh"  "$PROFILE/airootfs/usr/lib/titos-iso/install/"
+rsync -a --delete "$SRC/titos/" "$PROFILE/airootfs/usr/lib/titos-iso/titos/"
+chmod +x "$PROFILE/airootfs/usr/lib/titos-iso/live-boot-hint"
+
+echo ":: Live-Hinweis-Service aktivieren ..."
+mkdir -p "$PROFILE/airootfs/etc/systemd/system/multi-user.target.wants"
+ln -sfn /usr/lib/systemd/system/titos-live.service \
+    "$PROFILE/airootfs/etc/systemd/system/multi-user.target.wants/titos-live.service"
+
+echo ":: Serial-Console (ttyS0) für Headless-VM-Tests / Server-Betreuung ..."
+mkdir -p "$PROFILE/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d"
+cat > "$PROFILE/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf" <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-f titos' --keep-baud 115200,38400,9600 %I $TERM
+EOF
+mkdir -p "$PROFILE/airootfs/etc/systemd/system/getty.target.wants"
+ln -sfn /usr/lib/systemd/system/serial-getty@.service \
+    "$PROFILE/airootfs/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
+
+# console= Kernel-Parameter in Bootloader-Einträge (systemd-boot + syslinux)
+while IFS= read -r f; do
+    sed -i 's/^options /options console=tty0 console=ttyS0,115200 /' "$f"
+done < <(grep -rl '^options ' "$PROFILE" --include='*.conf' 2>/dev/null | grep -iv 'systemd/[a-z]*\.conf$' || true)
+while IFS= read -r f; do
+    sed -i 's/^APPEND /APPEND console=tty0 console=ttyS0,115200 /' "$f"
+done < <(grep -rl '^APPEND ' "$PROFILE" 2>/dev/null || true)
+
+echo ":: Baue ISO (mkarchiso) ..."
+mkarchiso -v -w "$WORK" -o "$OUT" "$PROFILE"
+
+rm -rf "$WORK"
+
+echo ""
+echo "════════════════════════════════════════════"
+echo "  ISO gebaut: $OUT"
+echo "════════════════════════════════════════════"
+ls -lh "$OUT"
+(cd "$OUT" && sha256sum titOS-*.iso > titOS-*.iso.sha256 2>/dev/null || sha256sum *.iso > "$(ls -1t *.iso | head -1).sha256")

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# titos-splash — Animierter Terminal-Begrüßungsscreen / animated terminal welcome screen
+# Lila/Cyan Akzente / purple & cyan accents
+P='\033[1;35m'; C='\033[1;36m'; D='\033[2m'; R='\033[0m'; G='\033[1;32m'
+
+# ASCII-Art "titOS" (figlet falls vorhanden, sonst eingebaut / builtin fallback)
+render_logo() {
+    if command -v figlet >/dev/null 2>&1; then
+        figlet -f standard "titOS"
+    else
+        cat <<'ART'
+   _   _   _    ___  ____
+  | |_(_) |_  / _ \/ ___|
+  | __| | __|| | | \___ \
+  | |_| | |_ | |_| |___) |
+   \__|_|\__| \___/|____/
+ART
+    fi
+}
+
+clear
+# Fade-In Zeile für Zeile / fade-in line by line
+echo -e "$P"
+while IFS= read -r line; do
+    echo "$line"
+    sleep 0.04
+done < <(render_logo)
+echo -e "$R"
+
+echo -e "${C}      titOS — AI-Powered Gaming Linux${R}"
+echo -e "${D}      ───────────────────────────────${R}\n"
+
+# System-Infos / system info
+HOST="$(hostname 2>/dev/null || echo titos)"
+KERNEL="$(uname -r)"
+UP="$(uptime -p 2>/dev/null | sed 's/up //' || echo '—')"
+RAM="$(free -h 2>/dev/null | awk '/Mem:/ {print $3" / "$2}' || echo '—')"
+
+printf "  ${P}%-10s${R} %s\n" "Host:"   "$HOST"
+printf "  ${P}%-10s${R} %s\n" "Kernel:" "$KERNEL"
+printf "  ${P}%-10s${R} %s\n" "Uptime:" "$UP"
+printf "  ${P}%-10s${R} %s\n" "RAM:"    "$RAM"
+echo
+
+# Automatischer Fehler-Hinweis / auto error hint
+if command -v systemctl >/dev/null 2>&1; then
+    FAILED="$(systemctl --failed --no-legend 2>/dev/null | wc -l)"
+    if [[ "${FAILED:-0}" -gt 0 ]]; then
+        echo -e "  \033[1;31m!${R} ${FAILED} fehlgeschlagene Dienste erkannt / failed services detected."
+        echo -e "    Tippe ${C}titos-help${R} für Hilfe. / Type ${C}titos-help${R} for help.\n"
+    fi
+fi
+
+echo -e "${G}  Probleme? Tippe: ${C}titos-help${R}\n"

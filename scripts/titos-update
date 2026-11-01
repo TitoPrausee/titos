@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# titos-update — System-Update / system update
+set -uo pipefail
+P='\033[1;35m'; C='\033[1;36m'; G='\033[1;32m'; R='\033[0m'; D='\033[2m'
+
+echo -e "${P}titOS Update${R}\n"
+
+echo -e "${C}:: System & AUR aktualisieren / updating system & AUR...${R}"
+if command -v yay >/dev/null 2>&1; then
+    yay -Syu --noconfirm
+else
+    sudo pacman -Syu --noconfirm
+fi
+
+echo -e "${C}:: Proton-GE Hinweis / check...${R}"
+if command -v protonup-qt >/dev/null 2>&1; then
+    echo -e "${D}   Öffne protonup-qt für neue Proton-GE Versionen. / open protonup-qt for new Proton-GE.${R}"
+else
+    echo -e "${D}   protonup-qt nicht installiert. / not installed.${R}"
+fi
+
+echo -e "${C}:: Ollama-Modell aktualisieren / updating Ollama model...${R}"
+MODEL="${TITOS_MODEL:-llama3.2}"
+if command -v ollama >/dev/null 2>&1; then
+    ollama pull "$MODEL" || echo -e "${D}   Modell-Update übersprungen / skipped.${R}"
+fi
+
+echo -e "\n${G}✔ titOS ist aktuell! / up to date!${R}"

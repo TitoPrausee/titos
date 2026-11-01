@@ -1,0 +1,47 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 34,
+    "spacing": 6,
+    "modules-left": ["custom/titos", "hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["cpu", "memory", "temperature", "pulseaudio", "network", "tray"],
+
+    "custom/titos": {
+        "format": "  titOS",
+        "tooltip": false
+    },
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "on-click": "activate"
+    },
+    "clock": {
+        "format": "{:%a %d.%m  %H:%M}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt>{calendar}</tt>"
+    },
+    "cpu": {
+        "format": " {usage}%",
+        "interval": 2
+    },
+    "memory": {
+        "format": " {percentage}%",
+        "interval": 3
+    },
+    "temperature": {
+        "format": " {temperatureC}°C",
+        "critical-threshold": 85,
+        "tooltip": true
+    },
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": " muted",
+        "format-icons": {"default": ["", "", ""]},
+        "on-click": "pavucontrol"
+    },
+    "network": {
+        "format-wifi": " {signalStrength}%",
+        "format-ethernet": " ",
+        "format-disconnected": "⚠ off"
+    },
+    "tray": {"spacing": 8}
+}

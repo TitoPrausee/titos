@@ -1,0 +1,38 @@
+/* titOS Waybar — dunkel/elegant, Lila/Cyan Akzente */
+* {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 13px;
+    border: none;
+    border-radius: 0;
+}
+window#waybar {
+    background: rgba(10, 5, 16, 0.92);
+    color: #c9b8e8;
+}
+#custom-titos {
+    color: #b48cff;
+    font-weight: bold;
+    padding: 0 14px;
+    margin: 4px 0 4px 6px;
+    background: rgba(180, 140, 255, 0.10);
+    border-radius: 8px;
+}
+#workspaces button {
+    color: #7a6a9a;
+    padding: 0 8px;
+}
+#workspaces button.active {
+    color: #6ad0e0;
+    border-bottom: 2px solid #b48cff;
+}
+#clock { color: #ffffff; font-weight: bold; }
+#cpu, #memory, #temperature, #pulseaudio, #network, #tray {
+    padding: 0 10px;
+    margin: 4px 2px;
+    background: rgba(180, 140, 255, 0.06);
+    border-radius: 8px;
+}
+#cpu { color: #6ad0e0; }
+#memory { color: #b48cff; }
+#temperature.critical { color: #ff5c7a; }
+#network.disconnected { color: #ff5c7a; }

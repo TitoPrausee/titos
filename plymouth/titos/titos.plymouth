@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=titOS
+Description=titOS animated boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/titos
+ScriptFile=/usr/share/plymouth/themes/titos/titos.script

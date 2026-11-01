@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# titos-help / titos-ai — KI-Agent CLI (Ollama) für titOS
+# Sammelt Systemkontext und fragt das lokale LLM. / Collects context and queries the local LLM.
+set -uo pipefail
+
+OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
+MODEL="${TITOS_MODEL:-llama3.2}"
+P='\033[1;35m'; C='\033[1;36m'; D='\033[2m'; R='\033[0m'; Y='\033[1;33m'
+
+GAME=""
+QUESTION=""
+# Argumente / args
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --game) GAME="$2"; shift 2;;
+        --model) MODEL="$2"; shift 2;;
+        -h|--help) echo "Nutzung: titos-help [--game \"Name\"] [Frage...]"; exit 0;;
+        *) QUESTION="${QUESTION} $1"; shift;;
+    esac
+done
+
+echo -e "${P}titOS Assistant${R} ${D}(Modell: ${MODEL})${R}"
+
+# Ollama erreichbar? / reachable?
+if ! curl -s --max-time 3 "${OLLAMA_URL}/api/tags" >/dev/null; then
+    echo -e "${Y}!${R} Ollama nicht erreichbar unter ${OLLAMA_URL}. / Ollama not reachable."
+    echo -e "   Starte es mit: ${C}systemctl start ollama${R}"
+    exit 1
+fi
+
+# Systemkontext sammeln / collect system context
+echo -e "${D}Sammle Systeminformationen... / collecting system info...${R}"
+FAILED="$(systemctl --failed --no-legend 2>/dev/null || true)"
+ERRLOG="$(journalctl -p err -n 50 --no-pager 2>/dev/null || true)"
+HW="$(lspci 2>/dev/null | grep -Ei 'vga|3d|audio|network' || true)"
+KERNEL="$(uname -r)"
+DISK="$(df -h / 2>/dev/null || true)"
+
+# Frage abfragen falls leer / prompt for question if empty
+if [[ -z "${QUESTION// }" && -z "$GAME" ]]; then
+    read -rp "$(echo -e "${C}Was ist dein Problem? / What is your problem? ${R}")" QUESTION
+fi
+[[ -n "$GAME" ]] && QUESTION="Spiel-spezifische Hilfe für '${GAME}'. ${QUESTION}"
+
+SYSTEM_PROMPT="Du bist der titOS Assistant, ein KI-Helfer für das titOS Gaming Linux System (Arch-basiert, Hyprland, linux-zen, Steam/Proton, GameMode, MangoHud, Wine/DXVK). Antworte praxisnah, auf Deutsch, mit konkreten Befehlen. Du bist der titOS Assistant, an AI helper for the titOS Gaming Linux system."
+
+USER_CONTENT="FRAGE/QUESTION: ${QUESTION}
+
+=== SYSTEMKONTEXT / SYSTEM CONTEXT ===
+Kernel: ${KERNEL}
+
+Fehlgeschlagene Dienste / failed services:
+${FAILED:-(keine / none)}
+
+Hardware (lspci):
+${HW}
+
+Festplatte / disk:
+${DISK}
+
+Letzte Fehler-Logs / recent error logs:
+${ERRLOG}"
+
+# JSON sicher bauen / safely build JSON (jq falls vorhanden)
+if command -v jq >/dev/null 2>&1; then
+    PAYLOAD="$(jq -n --arg m "$MODEL" --arg s "$SYSTEM_PROMPT" --arg u "$USER_CONTENT" \
+        '{model:$m, stream:false, messages:[{role:"system",content:$s},{role:"user",content:$u}]}')"
+else
+    esc() { python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'; }
+    S="$(printf '%s' "$SYSTEM_PROMPT" | esc)"
+    U="$(printf '%s' "$USER_CONTENT" | esc)"
+    PAYLOAD="{\"model\":\"${MODEL}\",\"stream\":false,\"messages\":[{\"role\":\"system\",\"content\":${S}},{\"role\":\"user\",\"content\":${U}}]}"
+fi
+
+echo -e "${D}Frage das lokale LLM... / querying local LLM...${R}\n"
+RESP="$(curl -s --max-time 120 "${OLLAMA_URL}/api/chat" -d "$PAYLOAD")"
+
+# Antwort extrahieren / extract answer
+if command -v jq >/dev/null 2>&1; then
+    ANSWER="$(echo "$RESP" | jq -r '.message.content // empty')"
+else
+    ANSWER="$(echo "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("message",{}).get("content",""))' 2>/dev/null)"
+fi
+
+if [[ -z "$ANSWER" ]]; then
+    echo -e "${Y}!${R} Keine Antwort erhalten. / no answer. Rohdaten / raw:"
+    echo "$RESP"
+    exit 1
+fi
+
+echo -e "${P}──────── Antwort / Answer ────────${R}"
+echo -e "$ANSWER"
+echo -e "${P}──────────────────────────────────${R}"

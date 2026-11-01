@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# titOS Live-Hinweis — wird beim Boot der Live-Umgebung auf tty1 angezeigt
+sleep 2
+printf '\033[1;35m'
+cat <<'EOF'
+   _   _   _    ___  ____
+  | |_(_) |_  / _ \/ ___|
+  | __| | __|| | | \___ \
+  | |_| | |_ | |_| |___) |
+   \__|_|\__| \___/|____/
+EOF
+printf '\033[0m'
+echo -e "\033[1;36m  titOS Live — AI-Powered Gaming Linux\033[0m"
+echo -e "\033[2m  ─────────────────────────────────────\033[0m"
+echo ""
+echo -e "  \033[1;32mInstallation starten:\033[0m  titos-install"
+echo ""
+echo -e "  \033[2mAlles andere (WLAN etc.) läuft über 'nmtui'  \033[0m"
+echo -e "  \033[2mNetzwerk muss stehen, bevor die Installation loslegt\033[0m"
+echo ""
