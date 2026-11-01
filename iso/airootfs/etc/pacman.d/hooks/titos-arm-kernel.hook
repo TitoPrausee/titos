@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = boot/Image
+
+[Action]
+Description = titOS: ARM-Kernel als vmlinuz-linux-aarch64 für mkarchiso bereitstellen
+When = PostTransaction
+Exec = /bin/sh -c 'cp -f usr/lib/modules/*/Image usr/lib/modules/*/Image.gz boot/ 2>/dev/null; cp -f boot/Image boot/vmlinuz-linux-aarch64'
+NeedsTargets = false
