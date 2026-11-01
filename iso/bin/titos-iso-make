@@ -6,6 +6,8 @@
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# titOS-Quellen überschreibbar (CI: Repo-Root statt iso/titos-Staging)
+TITOS_SRC="${TITOS_SRC:-$SRC/titos}"
 PROFILE="/var/tmp/titos-iso-profile"
 WORK="/var/tmp/titos-iso-work-$(date +%s)"
 OUT="${OUT:-$SRC/out}"
@@ -113,7 +115,7 @@ mkdir -p "$PROFILE/airootfs/usr/local/bin" "$PROFILE/airootfs/usr/lib/titos-iso/
 install -m 755 "$SRC/install/run.sh"             "$PROFILE/airootfs/usr/local/bin/titos-install"
 install -m 755 "$SRC/install/chroot-stage-a.sh"  "$PROFILE/airootfs/usr/lib/titos-iso/install/"
 install -m 755 "$SRC/install/chroot-stage-b.sh"  "$PROFILE/airootfs/usr/lib/titos-iso/install/"
-rsync -a --delete "$SRC/titos/" "$PROFILE/airootfs/usr/lib/titos-iso/titos/"
+rsync -a --delete "$TITOS_SRC/" "$PROFILE/airootfs/usr/lib/titos-iso/titos/"
 chmod +x "$PROFILE/airootfs/usr/lib/titos-iso/live-boot-hint"
 
 echo ":: Live-Hinweis-Service aktivieren ..."

@@ -12,14 +12,8 @@ mkdir -p "$OUT"
 [[ $EUID -eq 0 ]] || { echo "Bitte mit sudo laufen lassen."; exit 1; }
 echo ":: [titOS-CI] target=$ARCH host=$(uname -m)"
 
-# titOS-Quellen (Repo-Root) für den Builder in den ISO-Ordner legen
-# (titos-iso-make erwartet sie als "$SRC/titos/")
-CHECKOUT_ROOT="$(cd "$(dirname "$REPO_ROOT")" && pwd)"
-if [[ -d "$CHECKOUT_ROOT/titos" ]]; then
-    rm -rf "$REPO_ROOT/titos"
-    cp -R "$CHECKOUT_ROOT/titos" "$REPO_ROOT/titos"
-    echo ":: titOS-Quellen gestaget: $REPO_ROOT/titos"
-fi
+# titOS-Quellen liegen im Repo-Root (nicht iso/titos) — dem Builder via TITOS_SRC sagen
+export TITOS_SRC="$REPO_ROOT"
 
 cleanup() {
     umount "$ROOTFS/dev" "$ROOTFS/proc" "$ROOTFS/sys" "$ROOTFS/run" 2>/dev/null || true
@@ -38,7 +32,7 @@ if [[ "$ARCH" == "x86_64" ]]; then
             pacman -Syu --noconfirm || pacman -Syu --noconfirm
             pacman -S --needed --noconfirm archiso openssl zsh rsync
             cd /iso
-            OUT=/iso/out ./bin/titos-iso-make
+            TITOS_SRC=/iso OUT=/iso/out ./bin/titos-iso-make
         '
     cp "$REPO_ROOT"/out/* "$OUT/" 2>/dev/null || true
 else
@@ -77,7 +71,13 @@ else
         pacman-key --init
         pacman-key --populate archlinuxarm archlinux
         pacman -Syu --noconfirm
-        pacman -S --needed --noconfirm archiso openssl zsh sudo rsync dosfstools
+        pacman -S --needed --noconfirm openssl zsh sudo rsync dosfstools
+        # archiso ist NICHT in den ALARM-Repos: any-Paket von Arch mirror ziehen
+        curl -fL -o /tmp/archiso.pkg.tar.zst \
+            "https://geo.mirror.pkgbuild.com/extra/os/x86_64/archiso-91-1-any.pkg.tar.zst" \
+        && pacman -U --noconfirm /tmp/archiso.pkg.tar.zst \
+        || echo "! archiso-Download fehlgeschlagen"
+        pacman -Q archiso || exit 1
     '
 
     echo ":: Repo ins chroot ..."
@@ -85,7 +85,7 @@ else
     cp -R "$REPO_ROOT" "$ROOTFS/repo"
 
     echo ":: Baue ARM64-ISO im chroot ..."
-    chroot "$ROOTFS" bash -ec 'cd /repo && OUT=/repo/out ./bin/titos-iso-make'
+    chroot "$ROOTFS" bash -ec 'export TITOS_SRC=/repo; cd /repo && OUT=/repo/out ./bin/titos-iso-make'
 
     echo ":: Hole ISO + Checksumme ..."
     cp "$ROOTFS"/repo/out/*.iso "$ROOTFS"/repo/out/*.sha256 "$OUT/" 2>/dev/null || \
