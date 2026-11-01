@@ -1,8 +1,14 @@
-# titOS Live ISO — aarch64-Pakete (ARM64: Raspberry Pi 4/5 mit UEFI, ARM-Server, Ampere)
-# Ohne Gaming-Stack (Steam/Proton ist x86-only) — mit Hyprland-Desktop, KI-Agent und Branding.
+# titOS Live ISO - aarch64 (ARM64) - Live-Umgebung + Installer
+# Ohne Gaming-Stack (Steam/Proton/DXVK ist x86-only) - mit Hyprland-Desktop.
+# Kernel: linux-aarch64 (ALARM). Der lokale KI-Assistent liegt nicht in den
+# ALARM-Repos - titos-help gibt dazu eine klare Meldung auf dem ARM-System.
 base
 linux-aarch64
 linux-firmware
+mkinitcpio-archiso
+
+# Live-Installer-Werkzeuge
+archinstall
 arch-install-scripts
 mkinitcpio
 parted
@@ -11,10 +17,6 @@ e2fsprogs
 gptfdisk
 btrfs-progs
 rsync
-erofs-utils
-squashfs-tools
-libisoburn
-mtools
 
 # Netz
 networkmanager
@@ -26,7 +28,7 @@ wget
 jq
 git
 
-# Desktop-Grundlage (Hyprland-Stack)
+# Desktop (Hyprland-Stack)
 hyprland
 hyprpaper
 hyprlock
@@ -59,4 +61,3 @@ terminus-font
 man-db
 grub
 efibootmgr
-ollama
