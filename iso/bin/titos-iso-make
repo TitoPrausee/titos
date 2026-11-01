@@ -34,9 +34,8 @@ else
 fi
 
 echo ":: Räume auf ..."
-# Hängende proc/sys/dev-Mounts aus früheren Läufen lösen, sonst stirbt rm -rf daran
-while read -r m; do umount -l "$m" 2>/dev/null || true; done < <(findmnt -Rnr -o TARGET "$WORK" 2>/dev/null || true)
-umount -l "$WORK" 2>/dev/null || true
+# Hängende proc/sys/dev-Mounts aus früheren Läufen lösen (kein /dev/fd nötig)
+for m in $(awk -v w="$WORK" '$2 ~ w {print $2}' /proc/mounts); do umount -l "$m" 2>/dev/null || true; done
 rm -rf "$WORK" || true
 mkdir -p "$PROFILE" "$OUT"
 
@@ -52,21 +51,21 @@ if [[ "$ARCH" == "aarch64" ]]; then
     cp "$SRC/pacman-aarch64.conf" "$PROFILE/pacman.conf"
 
     echo ":: Boot-Einträge auf linux-aarch64 umbiegen ..."
-    while IFS= read -r f; do
+    for f in $(grep -rl 'vmlinuz-linux' "$PROFILE" 2>/dev/null || true); do
         sed -i \
             -e 's/vmlinuz-linux/vmlinuz-linux-aarch64/g' \
             -e 's/initramfs-linux\.img/initramfs-linux-aarch64.img/g' \
             "$f"
-    done < <(grep -rl 'vmlinuz-linux' "$PROFILE" || true)
+    done
 else
     echo ":: Kernel -> linux-zen umbiegen (x86_64) ..."
-    while IFS= read -r f; do
+    for f in $(grep -rl 'vmlinuz-linux' "$PROFILE" 2>/dev/null || true); do
         sed -i \
             -e 's/vmlinuz-linux-zen/vmlinuz-linux/g' \
             -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
             -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
             "$f"
-    done < <(grep -rl 'vmlinuz-linux' "$PROFILE" || true)
+    done
 
     # mkinitcpio preset: linux.preset -> linux-zen.preset
     PRESET_DIR="$PROFILE/airootfs/etc/mkinitcpio.d"
@@ -83,7 +82,7 @@ echo ":: ISO-Beschriftung auf titOS setzen ..."
 sed -i "s/^iso_name=.*/iso_name=\"titOS\"/"                          "$PROFILE/profiledef.sh"
 sed -i "s/^iso_label=.*/iso_label=\"TITOS_\$(date +%Y%m)\"/"          "$PROFILE/profiledef.sh"
 sed -i "s/^iso_application=.*/iso_application=\"titOS Live-Installer (AI-Powered Gaming Linux)\"/" "$PROFILE/profiledef.sh"
-sed -i "s/^iso_publisher=.*/iso_publisher=\"titOS <https:\\\/\\\/github.com\\\/TitoPrausee\\\/titOS>\"/" "$PROFILE/profiledef.sh"
+sed -i "s|^iso_publisher=.*|iso_publisher=\"titOS <https://github.com/TitoPrausee/titOS>\"|" "$PROFILE/profiledef.sh"
 
 echo ":: Tote Memtest-Einträge entfernen (Paket nicht in der Liste) ..."
 rm -f "$PROFILE"/efiboot/loader/entries/03-*memtest*.conf \
@@ -134,12 +133,12 @@ ln -sfn /usr/lib/systemd/system/serial-getty@.service \
     "$PROFILE/airootfs/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
 
 # console= Kernel-Parameter in Bootloader-Einträge (systemd-boot + syslinux)
-while IFS= read -r f; do
+for f in $(grep -rl '^options ' "$PROFILE" --include='*.conf' 2>/dev/null | grep -iv 'systemd/[a-z]*\.conf$' || true); do
     sed -i 's/^options /options console=tty0 console=ttyS0,115200 /' "$f"
-done < <(grep -rl '^options ' "$PROFILE" --include='*.conf' 2>/dev/null | grep -iv 'systemd/[a-z]*\.conf$' || true)
-while IFS= read -r f; do
+done
+for f in $(grep -rl '^APPEND ' "$PROFILE" 2>/dev/null || true); do
     sed -i 's/^APPEND /APPEND console=tty0 console=ttyS0,115200 /' "$f"
-done < <(grep -rl '^APPEND ' "$PROFILE" 2>/dev/null || true)
+done
 
 echo ":: Baue ISO (mkarchiso, kernel=$KERNEL) ..."
 mkarchiso -v -w "$WORK" -o "$OUT" "$PROFILE"
