@@ -56,9 +56,27 @@ echo ":: titOS-Quellen nach /opt/titos ..."
 cp -R /usr/lib/titos-iso/titos /opt/titos
 chown -R "${TITOS_USER}":"${TITOS_USER}" /opt/titos
 
-echo ":: titOS install.sh --iso (als ${TITOS_USER}, GPU=${TITOS_GPU^^}) ..."
-runuser -u "${TITOS_USER}" -- bash -c \
-    "set -a; source /tmp/titos-install.env; set +a; bash /opt/titos/install.sh --iso"
+if [[ "${IS_ARM:-0}" -eq 1 ]]; then
+    echo ":: ARM-System: Gaming-Stack überspringen — Desktop + Branding only ..."
+    echo "::   Hyprland & Apps ..."
+    # Desktop-Grundlage ohne Steam/Proton/Wine (x86-only); ollama existiert nicht auf ARM
+    pacman -S --needed --noconfirm \
+        hyprland hyprpaper hypridle hyprlock \
+        waybar wofi dunst kitty thunar \
+        firefox neovim \
+        grim slurp wl-clipboard \
+        polkit-gnome xdg-desktop-portal-hyprland \
+        ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji \
+        figlet || echo "! Pakete fehlgeschlagen / packages failed"
+    # Dotfiles + Skripte als User (Symlinks -> $HOME des Users)
+    echo "::   Dotfiles & Skripte (als ${TITOS_USER}) ..."
+    runuser -u "${TITOS_USER}" -- env TITOS_DIR=/opt/titos bash /opt/titos/setup/desktop.sh || true
+    TITOS_DIR=/opt/titos bash /opt/titos/setup/branding.sh || true
+else
+    echo ":: titOS install.sh --iso (als ${TITOS_USER}, GPU=${TITOS_GPU^^}) ..."
+    runuser -u "${TITOS_USER}" -- bash -c \
+        "set -a; source /tmp/titos-install.env; set +a; bash /opt/titos/install.sh --iso"
+fi
 
 echo ":: Hyprland-Hinweis in .zshrc ..."
 if ! grep -q 'Hyprland' "/home/${TITOS_USER}/.zshrc" 2>/dev/null; then

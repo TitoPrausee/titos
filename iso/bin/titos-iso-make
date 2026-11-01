@@ -1,17 +1,37 @@
 #!/usr/bin/env bash
-# titos-iso-make — baut die titOS ISO (lauft auf dem Build-Host, braucht root)
-# Erzeugt das ISO aus dem archiso-releng Basisprofil + titOS-Override.
-#   sudo ./bin/titos-iso-make
+# titos-iso-make — baut die titOS ISO (braucht root + archiso)
+# Multi-Arch: x86_64 (linux-zen, Gaming) + aarch64 (linux-aarch64, ohne Gaming-Stack).
+#   sudo ./bin/titos-iso-make              # Architektur des Hosts
+#   sudo ARCH=aarch64 ./bin/titos-iso-make # ARM64 explizit (auf ARM-Host)
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE="/var/tmp/titos-iso-profile"
 WORK="/var/tmp/titos-iso-work"
 OUT="${OUT:-$SRC/out}"
+ARCH="${ARCH:-$(uname -m)}"
 LIVE_USER="titos"
 LIVE_USER_PW="titos"
 
 [[ $EUID -eq 0 ]] || { echo "Bitte mit sudo ausführen (mkarchiso braucht root)."; exit 1; }
+[[ "$ARCH" == "x86_64" || "$ARCH" == "aarch64" ]] || { echo "Unsupported ARCH=$ARCH (nur x86_64|aarch64)"; exit 1; }
+
+# aarch64-Bau auf x86-Host: braucht qemu-user-static + binfmt (nur für chroot-Paketzugriff;
+# mkarchiso kann das nicht emuliert — deshalb ARM-ISO nur auf ARM-Host bauen!)
+if [[ "$ARCH" != "$(uname -m)" ]]; then
+    echo "! WARNUNG: Cross-Build ($ARCH auf $(uname -m)) wird nicht unterstützt —"
+    echo "  die ARM-ISO bitte auf einem ARM64-Host bauen (z.B. GitHub Actions ubuntu-*-arm)."
+    exit 1
+fi
+
+if [[ "$ARCH" == "x86_64" ]]; then
+    KERNEL="linux-zen"
+else
+    KERNEL="linux-aarch64"
+    if [[ ! -e /etc/pacman.d/alarm-mirrorlist && ! -f "$SRC/pacman-aarch64.conf" ]]; then
+        echo "! aarch64 braucht ALARM-Repo-Zugriff (pacman-aarch64.conf liegt im Profil)"
+    fi
+fi
 
 echo ":: Räume auf ..."
 rm -rf "$PROFILE" "$WORK"
@@ -20,35 +40,51 @@ mkdir -p "$PROFILE" "$OUT"
 echo ":: Kopiere archiso releng Basisprofil ..."
 cp -a /usr/share/archiso/configs/releng/. "$PROFILE/"
 
-echo ":: Overlaye titOS Profil (packages, airootfs) ..."
-rsync -a "$SRC/packages.x86_64" "$PROFILE/packages.x86_64"
+echo ":: Overlaye titOS Profil (packages.$ARCH, airootfs) ..."
+rsync -a "$SRC/packages.$ARCH" "$PROFILE/packages.$ARCH"
 rsync -a "$SRC/airootfs/" "$PROFILE/airootfs/"
 
-echo ":: Kernel -> linux-zen umbiegen ..."
-# Normalisieren + ersetzen (idempotent)
-while IFS= read -r f; do
-    sed -i \
-        -e 's/vmlinuz-linux-zen/vmlinuz-linux/g' \
-        -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
-        -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
-        "$f"
-done < <(grep -rl 'vmlinuz-linux' "$PROFILE" || true)
+if [[ "$ARCH" == "aarch64" ]]; then
+    echo ":: ALARM-Repo-Konfig (Arch Linux ARM mirrors) ..."
+    cp "$SRC/pacman-aarch64.conf" "$PROFILE/pacman.conf"
 
-# mkinitcpio preset: linux.preset -> linux-zen.preset
-PRESET_DIR="$PROFILE/airootfs/etc/mkinitcpio.d"
-if [[ -f "$PRESET_DIR/linux.preset" && ! -f "$PRESET_DIR/linux-zen.preset" ]]; then
-    mv "$PRESET_DIR/linux.preset" "$PRESET_DIR/linux-zen.preset"
-    sed -i \
-        -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
-        -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
-        "$PRESET_DIR/linux-zen.preset"
+    echo ":: Boot-Einträge auf linux-aarch64 umbiegen ..."
+    while IFS= read -r f; do
+        sed -i \
+            -e 's/vmlinuz-linux/vmlinuz-linux-aarch64/g' \
+            -e 's/initramfs-linux\.img/initramfs-linux-aarch64.img/g' \
+            "$f"
+    done < <(grep -rl 'vmlinuz-linux' "$PROFILE" || true)
+else
+    echo ":: Kernel -> linux-zen umbiegen (x86_64) ..."
+    while IFS= read -r f; do
+        sed -i \
+            -e 's/vmlinuz-linux-zen/vmlinuz-linux/g' \
+            -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
+            -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
+            "$f"
+    done < <(grep -rl 'vmlinuz-linux' "$PROFILE" || true)
+
+    # mkinitcpio preset: linux.preset -> linux-zen.preset
+    PRESET_DIR="$PROFILE/airootfs/etc/mkinitcpio.d"
+    if [[ -f "$PRESET_DIR/linux.preset" && ! -f "$PRESET_DIR/linux-zen.preset" ]]; then
+        mv "$PRESET_DIR/linux.preset" "$PRESET_DIR/linux-zen.preset"
+        sed -i \
+            -e 's/initramfs-linux\.img/initramfs-linux-zen.img/g' \
+            -e 's/vmlinuz-linux/vmlinuz-linux-zen/g' \
+            "$PRESET_DIR/linux-zen.preset"
+    fi
 fi
 
 echo ":: ISO-Beschriftung auf titOS setzen ..."
-sed -i 's/^iso_name=.*/iso_name="titOS"/'                  "$PROFILE/profiledef.sh"
-sed -i 's/^iso_label=.*/iso_label="TITOS_$(date +%Y%m)"/'  "$PROFILE/profiledef.sh"
-sed -i 's/^iso_application=.*/iso_application="titOS Live-Installer (AI-Powered Gaming Linux)"/' "$PROFILE/profiledef.sh"
-sed -i 's/^iso_publisher=.*/iso_publisher="titOS <https:\/\/github.com\/TitoPrausee\/titOS>"/'   "$PROFILE/profiledef.sh"
+sed -i "s/^iso_name=.*/iso_name=\"titOS\"/"                          "$PROFILE/profiledef.sh"
+sed -i "s/^iso_label=.*/iso_label=\"TITOS_\$(date +%Y%m)\"/"          "$PROFILE/profiledef.sh"
+sed -i "s/^iso_application=.*/iso_application=\"titOS Live-Installer (AI-Powered Gaming Linux)\"/" "$PROFILE/profiledef.sh"
+sed -i "s/^iso_publisher=.*/iso_publisher=\"titOS <https:\\\/\\\/github.com\\\/TitoPrausee\\\/titOS>\"/" "$PROFILE/profiledef.sh"
+
+echo ":: Tote Memtest-Einträge entfernen (Paket nicht in der Liste) ..."
+rm -f "$PROFILE"/efiboot/loader/entries/03-*memtest*.conf \
+      "$PROFILE"/syslinux/*memtest*.cfg 2>/dev/null || true
 
 echo ":: Live-User ${LIVE_USER} anlegen (autologin), root-Passwort sperren ..."
 HASH="$(openssl passwd -6 "$LIVE_USER_PW")"
@@ -102,14 +138,14 @@ while IFS= read -r f; do
     sed -i 's/^APPEND /APPEND console=tty0 console=ttyS0,115200 /' "$f"
 done < <(grep -rl '^APPEND ' "$PROFILE" 2>/dev/null || true)
 
-echo ":: Baue ISO (mkarchiso) ..."
+echo ":: Baue ISO (mkarchiso, kernel=$KERNEL) ..."
 mkarchiso -v -w "$WORK" -o "$OUT" "$PROFILE"
 
 rm -rf "$WORK"
 
 echo ""
 echo "════════════════════════════════════════════"
-echo "  ISO gebaut: $OUT"
+echo "  ISO gebaut ($ARCH): $OUT"
 echo "════════════════════════════════════════════"
 ls -lh "$OUT"
-(cd "$OUT" && sha256sum titOS-*.iso > titOS-*.iso.sha256 2>/dev/null || sha256sum *.iso > "$(ls -1t *.iso | head -1).sha256")
+(cd "$OUT" && sha256sum *.iso > "$(ls -1t *.iso | head -1).sha256") || true

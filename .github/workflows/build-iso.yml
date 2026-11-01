@@ -1,0 +1,43 @@
+name: build-iso
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Architektur'
+        required: true
+        default: 'both'
+        type: choice
+        options: [both, x86_64, aarch64]
+
+permissions:
+  contents: read
+
+jobs:
+  x86_64:
+    if: inputs.arch != 'aarch64'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: x86_64 ISO bauen (Arch-Container)
+        run: sudo ./iso/bin/titos-iso-ci.sh x86_64
+      - name: Artifacts hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: titos-iso-x86_64
+          path: out/
+          retention-days: 14
+
+  aarch64:
+    if: inputs.arch != 'x86_64'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: aarch64 ISO bauen (natives ARM-Chroot, ALARM)
+        run: sudo ./iso/bin/titos-iso-ci.sh aarch64
+      - name: Artifacts hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: titos-iso-aarch64
+          path: out/
+          retention-days: 14

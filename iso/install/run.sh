@@ -62,20 +62,42 @@ mount "$P3" /mnt
 mkdir -p /mnt/efi
 mount "$P2" /mnt/efi
 
+# ─── Architektur / Architektur (x86_64 | aarch64) ────────────────────────────
+ARCH="$(uname -m)"
+IS_ARM=0
+[[ "$ARCH" == "aarch64" ]] && IS_ARM=1
+
 # ─── Basis-System ────────────────────────────────────────────────────────────
-echo -e "${C}:: pacstrap Basis-System (linux-zen) — dauert ein paar Minuten ...${R}"
-pacstrap -K /mnt \
-    base linux-zen linux-zen-headers linux-firmware \
-    intel-ucode amd-ucode \
-    base-devel git go \
-    arch-install-scripts \
-    sudo zsh networkmanager \
-    grub efibootmgr \
-    pciutils usbutils \
-    openssh vim nano tmux jq curl wget \
-    terminus-font man-db \
-    archlinux-keyring \
-    dosfstools e2fsprogs gptfdisk btrfs-progs rsync
+if [[ $IS_ARM -eq 1 ]]; then
+    echo -e "${C}:: pacstrap Basis-System (linux-aarch64) — dauert ein paar Minuten ...${R}"
+    pacstrap -K /mnt \
+        base linux-aarch64 linux-aarch64-headers linux-firmware \
+        base-devel git go \
+        arch-install-scripts \
+        sudo zsh networkmanager \
+        grub efibootmgr \
+        pciutils usbutils \
+        openssh vim nano tmux jq curl wget \
+        terminus-font man-db \
+        archlinux-keyring archlinuxarm-keyring \
+        dosfstools e2fsprogs gptfdisk btrfs-progs rsync
+else
+    echo -e "${C}:: pacstrap Basis-System (linux-zen) — dauert ein paar Minuten ...${R}"
+    pacstrap -K /mnt \
+        base linux-zen linux-zen-headers linux-firmware \
+        intel-ucode amd-ucode \
+        base-devel git go \
+        arch-install-scripts \
+        sudo zsh networkmanager \
+        grub efibootmgr \
+        pciutils usbutils \
+        openssh vim nano tmux jq curl wget \
+        terminus-font man-db \
+        archlinux-keyring \
+        dosfstools e2fsprogs gptfdisk btrfs-progs rsync
+fi
+
+printf 'TITOS_ARCH=%s\n' "$ARCH" > /tmp/titos-install.env
 
 echo -e "${C}:: Schreibe fstab ...${R}"
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -84,16 +106,20 @@ echo -e "${C}:: DNS für chroot rüberkopieren ...${R}"
 cp -L /etc/resolv.conf /mnt/etc/resolv.conf
 
 # ─── Konfig für chroot vorbereiten ───────────────────────────────────────────
-GPU="amd"
-if lspci 2>/dev/null | grep -qi nvidia; then
-    GPU="nvidia"
-elif lspci 2>/dev/null | grep -Eiq 'amd|ati|radeon'; then
+if [[ $IS_ARM -eq 1 ]]; then
+    GPU="none"   # ARM: kein dedizierter Gaming-GPU-Pfad / no dedicated GPU stack
+else
     GPU="amd"
-elif lspci 2>/dev/null | grep -qi intel; then
-    GPU="intel"
+    if lspci 2>/dev/null | grep -qi nvidia; then
+        GPU="nvidia"
+    elif lspci 2>/dev/null | grep -Eiq 'amd|ati|radeon'; then
+        GPU="amd"
+    elif lspci 2>/dev/null | grep -qi intel; then
+        GPU="intel"
+    fi
 fi
 echo -e "${C}→ GPU-Vendor für Titel: ${GPU}${R}"
-printf 'TITOS_GPU=%s\nTITOS_USER=%s\n' "$GPU" "$TITOS_USER" > /tmp/titos-install.env
+printf 'TITOS_GPU=%s\nTITOS_USER=%s\nIS_ARM=%s\n' "$GPU" "$TITOS_USER" "$IS_ARM" >> /tmp/titos-install.env
 chmod 644 /tmp/titos-install.env
 
 # Stage-Skripte + Boot-Pass + Env ins Zielsystem kopieren
